@@ -5,6 +5,16 @@ This version runs fully on **simulated data** (Demo Mode), so it works in the iO
 
 > Speed scores are **relative (0–100) and experimental**. They are not validated m/s velocity measurements.
 
+## Features
+
+- Back Squat tracking (other lifts shown as "coming soon")
+- Live rep counter with Slow / Medium / Fast relative speed
+- Target speed zone (in zone / too slow / too fast)
+- Speed-drop limit: "stop the set" alert when reps slow down past your limit
+- Hands-free sets: timer starts on the first rep, set ends after a pause, rest timer starts
+- Estimated mean/peak velocity (m/s), power (W) and range of motion (cm), always marked EST. and hideable in Settings
+- Results, history, progress charts, kg/lb, themes, Demo Mode
+
 ## Requirements
 
 - A Mac with **Xcode 16 or newer** (free from the Mac App Store)

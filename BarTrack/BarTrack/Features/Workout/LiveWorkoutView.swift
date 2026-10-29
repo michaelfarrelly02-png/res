@@ -9,6 +9,7 @@ struct LiveWorkoutView: View {
 
     @AppStorage(AppStorageKey.weightUnit) private var unitRaw = WeightUnit.kg.rawValue
     @AppStorage(AppStorageKey.simulationPace) private var paceRaw = SimulationPace.normal.rawValue
+    @AppStorage(AppStorageKey.showEstimates) private var showEstimates = true
     @State private var showDiscardConfirmation = false
 
     private var unit: WeightUnit { WeightUnit(rawValue: unitRaw) ?? .kg }
@@ -23,10 +24,17 @@ struct LiveWorkoutView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
+                    if viewModel.cutoffReached {
+                        cutoffBanner
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                     infoRow
                     repCounter
                         .padding(.vertical, 4)
                     latestRepCard
+                    if viewModel.configuration.velocityLossLimit != nil {
+                        speedDropCard
+                    }
                     chartCard
                     if let simulator = viewModel.simulator {
                         DemoControlsCard(
@@ -47,8 +55,18 @@ struct LiveWorkoutView: View {
             }
             .scrollIndicators(.hidden)
 
+            if let seconds = viewModel.autoEndCountdown {
+                autoEndBanner(seconds: seconds)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             controlBar
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.autoEndCountdown)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.cutoffReached)
+        .onChange(of: viewModel.shouldAutoFinish) { _, shouldFinish in
+            if shouldFinish { onFinish() }
+        }
+        .sensoryFeedback(.warning, trigger: viewModel.cutoffReached)
         .onAppear {
             viewModel.simulator?.pace = SimulationPace(rawValue: paceRaw) ?? .normal
             viewModel.start()
@@ -185,39 +203,51 @@ struct LiveWorkoutView: View {
     private var latestRepCard: some View {
         Card(highlight: viewModel.latestRep?.speedClass.color) {
             if let rep = viewModel.latestRep {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        SectionLabel("Rep \(rep.number) · relative speed")
-                        HStack(spacing: 10) {
-                            Image(systemName: rep.speedClass.symbol)
-                                .font(.title2.weight(.bold))
-                            Text(rep.speedClass.label)
-                                .font(.metric(38, weight: .black))
-                        }
-                        .foregroundStyle(rep.speedClass.color)
-                        .contentTransition(.interpolate)
-                        if let zone = viewModel.configuration.speedZone {
-                            HStack(spacing: 8) {
-                                ZoneStatusBadge(status: zone.status(for: rep.speedScore))
-                                Text("\(viewModel.inZoneCount)/\(viewModel.reps.count) in zone")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Theme.textSecondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            SectionLabel("Rep \(rep.number) · relative speed")
+                            HStack(spacing: 10) {
+                                Image(systemName: rep.speedClass.symbol)
+                                    .font(.title2.weight(.bold))
+                                Text(rep.speedClass.label)
+                                    .font(.metric(38, weight: .black))
                             }
-                            .padding(.top, 4)
+                            .foregroundStyle(rep.speedClass.color)
+                            .contentTransition(.interpolate)
+                            if let zone = viewModel.configuration.speedZone {
+                                HStack(spacing: 8) {
+                                    ZoneStatusBadge(status: zone.status(for: rep.speedScore))
+                                    Text("\(viewModel.inZoneCount)/\(viewModel.reps.count) in zone")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(Theme.textSecondary)
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 0) {
+                            Text(Format.score(rep.speedScore))
+                                .font(.metric(38, weight: .heavy))
+                                .foregroundStyle(Theme.textPrimary)
+                                .contentTransition(.numericText(value: rep.speedScore))
+                            Text("score / 100")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textSecondary)
                         }
                     }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(Format.score(rep.speedScore))
-                            .font(.metric(38, weight: .heavy))
-                            .foregroundStyle(Theme.textPrimary)
-                            .contentTransition(.numericText(value: rep.speedScore))
-                        Text("score / 100")
-                            .font(.caption)
-                            .foregroundStyle(Theme.textSecondary)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: rep.id)
+                    if showEstimates, let velocity = rep.meanVelocity {
+                        Divider().overlay(Theme.border)
+                        HStack(spacing: 8) {
+                            MiniMetric(label: "Mean vel.", value: Format.velocity(velocity), unit: "m/s")
+                            MiniMetric(label: "Peak vel.", value: rep.peakVelocity.map(Format.velocity) ?? "–", unit: "m/s")
+                            MiniMetric(label: "Power", value: rep.power.map(Format.watts) ?? "–", unit: "W")
+                            MiniMetric(label: "Depth", value: rep.rangeOfMotionCm.map(Format.centimetres) ?? "–", unit: "cm")
+                        }
+                        .overlay(alignment: .topTrailing) { EstimateTag().offset(y: -14) }
                     }
                 }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: rep.id)
             } else {
                 HStack(spacing: 12) {
                     Image(systemName: "figure.strengthtraining.traditional")
@@ -227,6 +257,11 @@ struct LiveWorkoutView: View {
                         Text(viewModel.isPaused ? "Set paused" : "Waiting for first rep…")
                             .font(.headline)
                             .foregroundStyle(Theme.textPrimary)
+                        if viewModel.isWaitingForFirstRep && !viewModel.isPaused {
+                            Text("The set timer starts on your first rep.")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.accent)
+                        }
                         Text(viewModel.simulator != nil
                              ? "Use the Demo controls below to simulate reps."
                              : "Start lifting. Reps appear here automatically.")
@@ -236,6 +271,77 @@ struct LiveWorkoutView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Speed drop
+
+    private var cutoffBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "hand.raised.fill")
+                .font(.title2.weight(.bold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("STOP THE SET")
+                    .font(.metric(22, weight: .black))
+                Text("Speed dropped \(Int((viewModel.currentSpeedDrop ?? 0).rounded()))% from your best rep (limit \(Int(viewModel.configuration.velocityLossLimit ?? 0))%).")
+                    .font(.caption.weight(.semibold))
+                    .opacity(0.85)
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(Color.white)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Theme.danger))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var speedDropCard: some View {
+        let limit = viewModel.configuration.velocityLossLimit ?? 20
+        let drop = viewModel.currentSpeedDrop ?? 0
+        let fraction = min(1, drop / limit)
+        let color = drop >= limit ? Theme.danger : (fraction >= 0.7 ? Theme.warning : Theme.accent)
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    SectionLabel("Speed drop from best rep")
+                    Spacer()
+                    Text("\(Int(drop.rounded()))%")
+                        .font(.metric(22, weight: .heavy))
+                        .foregroundStyle(color)
+                        .contentTransition(.numericText(value: drop))
+                    Text("/ \(Int(limit))%")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.surfaceRaised)
+                        Capsule()
+                            .fill(color.gradient)
+                            .frame(width: geometry.size.width * fraction)
+                    }
+                }
+                .frame(height: 10)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: drop)
+            }
+        }
+    }
+
+    private func autoEndBanner(seconds: Int) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "timer")
+                .foregroundStyle(Theme.accent)
+            Text("Bar racked? Ending set in \(seconds)s")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .contentTransition(.numericText(value: Double(seconds)))
+            Spacer()
+            Button("Keep going") { viewModel.keepGoing() }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Theme.accent)
+        }
+        .padding(.horizontal, Theme.Spacing.screen)
+        .padding(.vertical, 12)
+        .background(Theme.surfaceRaised)
     }
 
     // MARK: - Chart

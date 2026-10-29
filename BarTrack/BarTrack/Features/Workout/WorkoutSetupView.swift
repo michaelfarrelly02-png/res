@@ -12,6 +12,10 @@ struct WorkoutSetupView: View {
     @AppStorage(AppStorageKey.zoneEnabled) private var zoneEnabled = false
     @AppStorage(AppStorageKey.zoneLower) private var zoneLower = 60.0
     @AppStorage(AppStorageKey.zoneUpper) private var zoneUpper = 80.0
+    @AppStorage(AppStorageKey.lossEnabled) private var lossEnabled = false
+    @AppStorage(AppStorageKey.lossLimit) private var lossLimit = 20.0
+    @AppStorage(AppStorageKey.autoDetect) private var autoDetect = true
+    @AppStorage(AppStorageKey.autoEndSeconds) private var autoEndSeconds = 8.0
 
     @State private var exercise: Exercise = .backSquat
     @State private var weightText = ""
@@ -42,6 +46,8 @@ struct WorkoutSetupView: View {
                     weightSection
                     targetSection
                     speedZoneSection
+                    speedDropSection
+                    autoDetectSection
                     trackingSection
                     startSection
                 }
@@ -290,6 +296,115 @@ struct WorkoutSetupView: View {
         }
     }
 
+    private var speedDropSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("Speed-drop limit")
+            Card {
+                VStack(spacing: 14) {
+                    Toggle(isOn: $lossEnabled.animation()) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Tell me when to stop the set")
+                                .font(.headline)
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("Alerts you when a rep is this much slower than your fastest rep.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                    .tint(Theme.accent)
+
+                    if lossEnabled {
+                        VStack(spacing: 12) {
+                            HStack(spacing: 8) {
+                                ForEach([10.0, 20.0, 30.0, 40.0], id: \.self) { value in
+                                    let isSelected = lossLimit == value
+                                    Button {
+                                        withAnimation(.snappy) { lossLimit = value }
+                                    } label: {
+                                        Text("\(Int(value))%")
+                                            .font(.subheadline.weight(.bold))
+                                            .foregroundStyle(isSelected ? Theme.onAccent : Theme.textPrimary)
+                                            .frame(maxWidth: .infinity, minHeight: 34)
+                                            .background(Capsule().fill(isSelected ? Theme.accent : Theme.surfaceRaised))
+                                    }
+                                    .buttonStyle(PressableButtonStyle())
+                                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                                }
+                            }
+                            HStack {
+                                CircleIconButton(systemName: "minus", size: 36) {
+                                    withAnimation(.snappy) { lossLimit = max(5, lossLimit - 5) }
+                                }
+                                Spacer()
+                                VStack(spacing: 0) {
+                                    Text("\(Int(lossLimit))%")
+                                        .font(.metric(36, weight: .heavy))
+                                        .foregroundStyle(Theme.textPrimary)
+                                        .contentTransition(.numericText(value: lossLimit))
+                                    Text("MAX SPEED DROP")
+                                        .font(.caption2.weight(.bold))
+                                        .tracking(1)
+                                        .foregroundStyle(Theme.textSecondary)
+                                }
+                                Spacer()
+                                CircleIconButton(systemName: "plus", size: 36) {
+                                    withAnimation(.snappy) { lossLimit = min(60, lossLimit + 5) }
+                                }
+                            }
+                            Text("Lower limits keep sets crisp (less fatigue). Higher limits allow more reps.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+            }
+        }
+    }
+
+    private var autoDetectSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("Auto start & end")
+            Card {
+                VStack(spacing: 14) {
+                    Toggle(isOn: $autoDetect.animation()) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Hands-free sets")
+                                .font(.headline)
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("The timer starts on your first rep, and the set ends when you rack the bar.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                    .tint(Theme.accent)
+
+                    if autoDetect {
+                        HStack {
+                            Text("End set after")
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.textPrimary)
+                            Spacer()
+                            Picker("End set after", selection: $autoEndSeconds) {
+                                Text("5 s").tag(5.0)
+                                Text("8 s").tag(8.0)
+                                Text("12 s").tag(12.0)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 170)
+                        }
+                        .transition(.opacity)
+                        Text("...with no reps. A rest timer then starts automatically.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+
     private func zoneStepper(title: String, value: Double, change: @escaping (Double) -> Void) -> some View {
         HStack {
             CircleIconButton(systemName: "minus", size: 34) { withAnimation(.snappy) { change(-5) } }
@@ -395,7 +510,10 @@ struct WorkoutSetupView: View {
             weightKg: unit.toKg(weightValue),
             targetReps: useTargetReps ? targetReps : nil,
             source: .simulated,
-            speedZone: zoneEnabled ? currentZone : nil
+            speedZone: zoneEnabled ? currentZone : nil,
+            velocityLossLimit: lossEnabled ? lossLimit : nil,
+            autoDetect: autoDetect,
+            autoEndAfter: autoEndSeconds
         )
         activeFlow = WorkoutFlowController(configuration: configuration)
     }

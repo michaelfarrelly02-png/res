@@ -219,6 +219,76 @@ struct EmptyStateView: View {
     }
 }
 
+// MARK: - Rest timer
+
+/// Counts up from the end of the last set.
+struct RestTimerPill: View {
+    let since: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: since, by: 1)) { context in
+            HStack(spacing: 6) {
+                Image(systemName: "timer")
+                Text("REST \(Format.clock(context.date.timeIntervalSince(since)))")
+                    .monospacedDigit()
+            }
+            .font(.caption.weight(.heavy))
+            .tracking(0.8)
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Theme.accent.opacity(0.12)))
+        }
+        .accessibilityLabel("Rest timer")
+    }
+}
+
+// MARK: - Estimates
+
+/// Small "EST." tag marking a value that is an unvalidated estimate.
+struct EstimateTag: View {
+    var body: some View {
+        Text("EST.")
+            .font(.system(size: 9, weight: .heavy))
+            .tracking(0.8)
+            .foregroundStyle(Theme.warning)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Theme.warning.opacity(0.14)))
+            .accessibilityLabel("estimated")
+    }
+}
+
+/// One compact metric: value, unit and label.
+struct MiniMetric: View {
+    let label: String
+    let value: String
+    var unit: String? = nil
+    var color: Color = Theme.textPrimary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.metric(20, weight: .heavy))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let unit {
+                    Text(unit)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            Text(label.uppercased())
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - Speed zone
 
 extension SpeedZone.Status {

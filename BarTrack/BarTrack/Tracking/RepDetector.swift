@@ -46,6 +46,8 @@ struct RepDetector {
     private var lastTimestamp: TimeInterval?
     private var intensity = 0.0
     private var peakIntensity = 0.0
+    /// Integrated travel (m) during the movement — a rough displacement estimate.
+    private var travel = 0.0
     private var stillSince: TimeInterval?
     private var lastRepEnd: TimeInterval = -.greatestFiniteMagnitude
 
@@ -69,6 +71,7 @@ struct RepDetector {
                 movementStart = sample.timestamp
                 intensity = 0
                 peakIntensity = 0
+                travel = 0
                 stillSince = nil
             }
             return nil
@@ -77,6 +80,7 @@ struct RepDetector {
         // Integrated acceleration magnitude: a rough "how fast did it move" proxy.
         intensity += smoothed * 9.81 * dt
         peakIntensity = max(peakIntensity, intensity)
+        travel += intensity * dt
 
         let duration = sample.timestamp - movementStart
         if duration > configuration.maxRepDuration {
@@ -89,10 +93,20 @@ struct RepDetector {
             if let stillSince, sample.timestamp - stillSince >= configuration.stillTime {
                 let repDuration = stillSince - movementStart
                 let peak = peakIntensity
+                let distance = travel
                 reset(at: sample.timestamp)
                 guard repDuration >= configuration.minRepDuration else { return nil }
                 let score = (peak / configuration.referencePeak * 100).clamped(to: 0...100)
-                return DetectedRep(speedScore: score, duration: repDuration, timestamp: sample.timestamp)
+                // Velocity and travel come from integrating acceleration, which drifts.
+                // They are placeholders until the Python v0.6.1 logic is ported and validated.
+                return DetectedRep(
+                    speedScore: score,
+                    duration: repDuration,
+                    timestamp: sample.timestamp,
+                    meanVelocity: distance / max(repDuration, 0.1),
+                    peakVelocity: peak,
+                    rangeOfMotionCm: distance * 100
+                )
             }
         } else {
             stillSince = nil
@@ -106,5 +120,6 @@ struct RepDetector {
         stillSince = nil
         intensity = 0
         peakIntensity = 0
+        travel = 0
     }
 }

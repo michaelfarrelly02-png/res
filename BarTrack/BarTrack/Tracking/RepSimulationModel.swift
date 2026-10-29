@@ -43,6 +43,40 @@ struct RepSimulationModel {
         }
     }
 
+    /// Estimated mean velocity (m/s) that matches a speed score.
+    static func meanVelocity(for score: Double, exercise: Exercise) -> Double {
+        let range = exercise.simulatedVelocityRange
+        return range.lowerBound + (range.upperBound - range.lowerBound) * score.clamped(to: 0...100) / 100
+    }
+
+    /// Peak velocity is typically 30–60% above the mean.
+    static func peakVelocity<G: RandomNumberGenerator>(forMean mean: Double, using generator: inout G) -> Double {
+        mean * Double.random(in: 1.3...1.6, using: &generator)
+    }
+
+    /// Bar travel in cm; occasionally a shorter (high) rep.
+    static func rangeOfMotion<G: RandomNumberGenerator>(for exercise: Exercise, using generator: inout G) -> Double {
+        let base = exercise.typicalRangeOfMotionCm
+        if Double.random(in: 0...1, using: &generator) < 0.12 {
+            return base * Double.random(in: 0.78...0.88, using: &generator)
+        }
+        return base * Double.random(in: 0.96...1.04, using: &generator)
+    }
+
+    /// A full simulated rep with estimated metrics.
+    static func makeRep<G: RandomNumberGenerator>(score: Double, exercise: Exercise, using generator: inout G) -> DetectedRep {
+        let mean = meanVelocity(for: score, exercise: exercise)
+        let rom = rangeOfMotion(for: exercise, using: &generator)
+        return DetectedRep(
+            speedScore: score,
+            duration: (rom / 100) / mean,
+            timestamp: nil,
+            meanVelocity: mean,
+            peakVelocity: peakVelocity(forMean: mean, using: &generator),
+            rangeOfMotionCm: rom
+        )
+    }
+
     /// Slower reps take longer.
     static func duration(for score: Double, exercise: Exercise) -> TimeInterval {
         exercise.baseConcentricDuration * (1.75 - score / 100)

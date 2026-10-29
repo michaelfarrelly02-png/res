@@ -98,14 +98,18 @@ enum SampleData {
         var clock: TimeInterval = 2
         for number in 1...max(1, repCount) {
             let score = model.score(forRep: number, using: &generator)
-            let duration = RepSimulationModel.duration(for: score, exercise: exercise)
-            clock += duration * 2.2 + Double.random(in: 0.6...1.4, using: &generator)
+            let detected = RepSimulationModel.makeRep(score: score, exercise: exercise, using: &generator)
+            clock += detected.duration * 2.2 + Double.random(in: 0.6...1.4, using: &generator)
             reps.append(RepRecord(
                 number: number,
                 speedScore: score,
                 speedClass: SpeedClassifier.default.classify(score),
-                duration: duration,
-                timestamp: clock
+                duration: detected.duration,
+                timestamp: clock,
+                meanVelocity: detected.meanVelocity,
+                peakVelocity: detected.peakVelocity,
+                power: detected.meanVelocity.map { weightKg * 9.81 * $0 },
+                rangeOfMotionCm: detected.rangeOfMotionCm
             ))
         }
         return SetResult(

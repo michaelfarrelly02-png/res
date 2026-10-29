@@ -157,6 +157,7 @@ private struct SetDetailCard: View {
     let entry: SetEntry
     let unit: WeightUnit
     @State private var selectedRep: Int?
+    @AppStorage(AppStorageKey.showEstimates) private var showEstimates = true
 
     private var repsText: String {
         guard let target = entry.targetReps else { return "\(entry.repCount)" }
@@ -190,6 +191,23 @@ private struct SetDetailCard: View {
                     } else {
                         stat("Early→Late", analytics.earlyToLateChange.map(Format.signedPercent) ?? "–")
                     }
+                }
+
+                if showEstimates && analytics.hasVelocityEstimates {
+                    HStack(spacing: 16) {
+                        stat("Mean m/s", analytics.averageMeanVelocity.map(Format.velocity) ?? "–")
+                        stat("Peak m/s", analytics.bestPeakVelocity.map(Format.velocity) ?? "–")
+                        stat("Power W", analytics.averagePower.map(Format.watts) ?? "–")
+                        stat("Depth cm", analytics.averageRangeOfMotion.map(Format.centimetres) ?? "–")
+                    }
+                    .overlay(alignment: .topTrailing) { EstimateTag() }
+                }
+
+                if let limit = entry.velocityLossLimit {
+                    let drop = analytics.velocityLoss ?? 0
+                    Label("Speed drop \(Int(drop.rounded()))% (limit \(Int(limit))%)", systemImage: drop >= limit ? "hand.raised.fill" : "checkmark.circle.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(drop >= limit ? Theme.danger : Theme.fast)
                 }
 
                 if let zone = entry.speedZone {

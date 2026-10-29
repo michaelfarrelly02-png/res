@@ -21,6 +21,9 @@ final class WorkoutFlowController: Identifiable {
     var weightKg: Double
     var targetReps: Int?
     var speedZone: SpeedZone?
+    let velocityLossLimit: Double?
+    let autoDetect: Bool
+    let autoEndAfter: TimeInterval
 
     private(set) var completedSets: [SetResult] = []
     private(set) var phase: Phase
@@ -31,6 +34,9 @@ final class WorkoutFlowController: Identifiable {
         weightKg = configuration.weightKg
         targetReps = configuration.targetReps
         speedZone = configuration.speedZone
+        velocityLossLimit = configuration.velocityLossLimit
+        autoDetect = configuration.autoDetect
+        autoEndAfter = configuration.autoEndAfter
         phase = .live(LiveWorkoutViewModel(configuration: configuration, setNumber: 1))
     }
 
@@ -57,7 +63,10 @@ final class WorkoutFlowController: Identifiable {
             weightKg: weightKg,
             targetReps: targetReps,
             source: source,
-            speedZone: speedZone
+            speedZone: speedZone,
+            velocityLossLimit: velocityLossLimit,
+            autoDetect: autoDetect,
+            autoEndAfter: autoEndAfter
         )
         phase = .live(LiveWorkoutViewModel(configuration: configuration, setNumber: completedSets.count + 1))
     }

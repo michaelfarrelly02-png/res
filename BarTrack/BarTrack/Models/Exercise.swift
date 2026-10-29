@@ -77,6 +77,29 @@ enum Exercise: String, CaseIterable, Identifiable, Codable, Hashable {
         }
     }
 
+    /// Mean concentric velocity (m/s) from a grinding rep to a very fast one.
+    /// Used only to simulate estimated velocities in Demo Mode.
+    var simulatedVelocityRange: ClosedRange<Double> {
+        switch self {
+        case .backSquat: 0.25...1.30
+        case .benchPress: 0.15...1.20
+        case .deadlift: 0.20...1.20
+        case .overheadPress: 0.20...1.20
+        case .barbellRow: 0.40...1.40
+        }
+    }
+
+    /// Typical bar travel for one rep, in centimetres (simulation only).
+    var typicalRangeOfMotionCm: Double {
+        switch self {
+        case .backSquat: 60
+        case .benchPress: 42
+        case .deadlift: 55
+        case .overheadPress: 55
+        case .barbellRow: 38
+        }
+    }
+
     /// Typical concentric duration (seconds) for a moderately fast rep.
     var baseConcentricDuration: Double {
         switch self {

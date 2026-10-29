@@ -68,8 +68,7 @@ final class SimulatedTrackingService: TrackingService {
         } else {
             score = model.score(forRep: repCount, using: &generator)
         }
-        let duration = RepSimulationModel.duration(for: score, exercise: context.exercise)
-        onEvent?(.rep(DetectedRep(speedScore: score, duration: duration, timestamp: nil)))
+        onEvent?(.rep(RepSimulationModel.makeRep(score: score, exercise: context.exercise, using: &generator)))
     }
 
     func startAutoSimulation() {

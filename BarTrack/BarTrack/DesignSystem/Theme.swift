@@ -13,6 +13,11 @@ enum AppStorageKey {
     static let zoneEnabled = "speedZoneEnabled"
     static let zoneLower = "speedZoneLower"
     static let zoneUpper = "speedZoneUpper"
+    static let lossEnabled = "speedDropEnabled"
+    static let lossLimit = "speedDropLimit"
+    static let autoDetect = "autoDetectSets"
+    static let autoEndSeconds = "autoEndSeconds"
+    static let showEstimates = "showEstimatedMetrics"
 }
 
 // MARK: - Theme options

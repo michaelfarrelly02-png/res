@@ -49,6 +49,8 @@ final class SetEntry {
     /// Target speed zone, if one was set (optional so older saves still load).
     var zoneLower: Double?
     var zoneUpper: Double?
+    /// Speed-drop limit in percent, if one was set.
+    var velocityLossLimit: Double?
     var session: WorkoutSession?
 
     init(result: SetResult) {
@@ -61,6 +63,7 @@ final class SetEntry {
         self.repsData = (try? JSONEncoder().encode(result.reps)) ?? Data()
         self.zoneLower = result.speedZone?.lower
         self.zoneUpper = result.speedZone?.upper
+        self.velocityLossLimit = result.velocityLossLimit
     }
 
     var speedZone: SpeedZone? {

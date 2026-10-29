@@ -36,6 +36,11 @@ struct DetectedRep {
     var duration: TimeInterval
     /// Seconds since tracking started, if the source knows it.
     var timestamp: TimeInterval?
+    /// Estimated mean and peak concentric velocity (m/s). Experimental.
+    var meanVelocity: Double? = nil
+    var peakVelocity: Double? = nil
+    /// Estimated bar travel in cm. Experimental.
+    var rangeOfMotionCm: Double? = nil
 }
 
 enum TrackingEvent {

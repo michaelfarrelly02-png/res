@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(AppStorageKey.backgroundStyle) private var backgroundRaw = BackgroundStyle.navy.rawValue
     @AppStorage(AppStorageKey.demoMode) private var demoMode = true
     @AppStorage(AppStorageKey.simulationPace) private var paceRaw = SimulationPace.normal.rawValue
+    @AppStorage(AppStorageKey.showEstimates) private var showEstimates = true
 
     @State private var confirmDeleteAll = false
     @State private var showMeasurementInfo = false
@@ -200,6 +201,16 @@ struct SettingsView: View {
         Section {
             ExperimentalNotice()
                 .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            Toggle(isOn: $showEstimates) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show estimated velocity & depth")
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("m/s, power (W) and range of motion (cm), marked EST. until validated.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .tint(Theme.accent)
             Button {
                 showMeasurementInfo = true
             } label: {
@@ -295,8 +306,8 @@ private struct MeasurementInfoSheet: View {
                     )
                     infoBlock(
                         icon: "chart.line.uptrend.xyaxis",
-                        title: "Coming later",
-                        text: "Mean concentric velocity (m/s), peak velocity, velocity loss and sensor quality indicators will be added once they have been validated."
+                        title: "Estimated velocity & depth",
+                        text: "Mean velocity (m/s), peak velocity, power (W) and range of motion (cm) are shown as estimates (EST.). In Demo Mode they are simulated. With AirPods they will come from the motion algorithm, and they are not yet validated against a reference device such as a linear position transducer. You can hide them in Settings."
                     )
                 }
                 .padding(Theme.Spacing.screen)

@@ -21,6 +21,21 @@ enum Format {
         score.map(Self.score) ?? "–"
     }
 
+    /// "0.72" (m/s)
+    static func velocity(_ value: Double) -> String {
+        String(format: "%.2f", value)
+    }
+
+    /// "1,240" (watts)
+    static func watts(_ value: Double) -> String {
+        Int(value.rounded()).formatted()
+    }
+
+    /// "58" (cm)
+    static func centimetres(_ value: Double) -> String {
+        "\(Int(value.rounded()))"
+    }
+
     /// "+12%" / "−8%"
     static func signedPercent(_ value: Double) -> String {
         let rounded = Int(value.rounded())

@@ -15,6 +15,12 @@ final class LiveWorkoutViewModel: Identifiable {
     private(set) var elapsed: TimeInterval = 0
     private(set) var startedAt = Date()
     private(set) var lastError: String?
+    /// Set when auto-detect decides the set is over; the screen then finishes it.
+    private(set) var shouldAutoFinish = false
+    /// Seconds left before the set auto-ends, shown in the last 5 seconds.
+    private(set) var autoEndCountdown: Int?
+    /// True once a rep drops past the speed-drop limit.
+    private(set) var cutoffReached = false
 
     private let service: any TrackingService
     private let classifier: SpeedClassifier
@@ -22,6 +28,8 @@ final class LiveWorkoutViewModel: Identifiable {
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var segmentStart: Date?
     @ObservationIgnored private var accumulated: TimeInterval = 0
+    /// When the bar last moved (last rep or resume), for auto-ending the set.
+    @ObservationIgnored private var idleSince: Date?
 
     init(
         configuration: SetConfiguration,
@@ -48,6 +56,11 @@ final class LiveWorkoutViewModel: Identifiable {
         return analytics.inZoneCount(zone)
     }
 
+    /// Waiting for the first rep before the timer starts (auto-detect).
+    var isWaitingForFirstRep: Bool { configuration.autoDetect && reps.isEmpty }
+
+    var currentSpeedDrop: Double? { analytics.velocityLoss }
+
     var targetProgress: Double {
         guard let target = configuration.targetReps, target > 0 else {
             return reps.isEmpty ? 0 : 1
@@ -69,7 +82,8 @@ final class LiveWorkoutViewModel: Identifiable {
                 targetReps: configuration.targetReps
             ))
             startedAt = Date()
-            segmentStart = Date()
+            // With auto-detect, the set timer starts on the first rep instead.
+            segmentStart = configuration.autoDetect ? nil : Date()
             startTimer()
         } catch {
             status = .failed(error.localizedDescription)
@@ -80,13 +94,22 @@ final class LiveWorkoutViewModel: Identifiable {
     func togglePause() {
         if isPaused {
             service.resume()
-            segmentStart = Date()
+            if !isWaitingForFirstRep { segmentStart = Date() }
+            idleSince = reps.isEmpty ? nil : Date()
         } else if isRecording {
             accumulated = currentElapsed()
             segmentStart = nil
+            idleSince = nil
+            autoEndCountdown = nil
             service.pause()
         }
         elapsed = currentElapsed()
+    }
+
+    /// Postpones auto-ending (the lifter is still going).
+    func keepGoing() {
+        idleSince = Date()
+        autoEndCountdown = nil
     }
 
     func simulateRep(_ speedClass: SpeedClass?) {
@@ -105,6 +128,10 @@ final class LiveWorkoutViewModel: Identifiable {
     /// Stops tracking and returns the finished set.
     func finish() -> SetResult {
         elapsed = currentElapsed()
+        if shouldAutoFinish, let idleSince {
+            // Don't count the pause that ended the set.
+            elapsed = max(0, elapsed - Date().timeIntervalSince(idleSince) + 1)
+        }
         tearDown()
         return SetResult(
             setNumber: setNumber,
@@ -115,7 +142,9 @@ final class LiveWorkoutViewModel: Identifiable {
             duration: elapsed,
             startedAt: startedAt,
             source: configuration.source,
-            speedZone: configuration.speedZone
+            speedZone: configuration.speedZone,
+            velocityLossLimit: configuration.velocityLossLimit,
+            endedAt: Date()
         )
     }
 
@@ -133,16 +162,48 @@ final class LiveWorkoutViewModel: Identifiable {
         case .failure(let message):
             lastError = message
         case .rep(let detected):
+            if reps.isEmpty && configuration.autoDetect {
+                // Auto-start: the set begins with the first rep.
+                startedAt = Date()
+                segmentStart = Date()
+                accumulated = 0
+            }
             let rep = RepRecord(
                 number: reps.count + 1,
                 speedScore: detected.speedScore,
                 speedClass: classifier.classify(detected.speedScore),
                 duration: detected.duration,
-                timestamp: detected.timestamp ?? currentElapsed()
+                timestamp: detected.timestamp ?? currentElapsed(),
+                meanVelocity: detected.meanVelocity,
+                peakVelocity: detected.peakVelocity,
+                power: detected.meanVelocity.map { configuration.weightKg * 9.81 * $0 },
+                rangeOfMotionCm: detected.rangeOfMotionCm
             )
             withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
                 reps.append(rep)
             }
+            idleSince = Date()
+            autoEndCountdown = nil
+            if let limit = configuration.velocityLossLimit, !cutoffReached,
+               let drop = analytics.velocityLoss, drop >= limit {
+                cutoffReached = true
+                // A lifter would stop here, so the simulated set stops too.
+                simulator?.stopAutoSimulation()
+            }
+        }
+    }
+
+    private func checkAutoEnd() {
+        guard configuration.autoDetect, isRecording, !shouldAutoFinish, let idleSince else { return }
+        let remaining = configuration.autoEndAfter - Date().timeIntervalSince(idleSince)
+        if remaining <= 0 {
+            autoEndCountdown = nil
+            shouldAutoFinish = true
+        } else if remaining <= 5 {
+            let seconds = Int(remaining.rounded(.up))
+            if autoEndCountdown != seconds { autoEndCountdown = seconds }
+        } else if autoEndCountdown != nil {
+            autoEndCountdown = nil
         }
     }
 
@@ -164,6 +225,7 @@ final class LiveWorkoutViewModel: Identifiable {
                 try? await Task.sleep(nanoseconds: 200_000_000)
                 guard let self else { return }
                 self.elapsed = self.currentElapsed()
+                self.checkAutoEnd()
             }
         }
     }

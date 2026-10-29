@@ -9,6 +9,7 @@ struct SetResultsView: View {
     var onDiscard: () -> Void
 
     @AppStorage(AppStorageKey.weightUnit) private var unitRaw = WeightUnit.kg.rawValue
+    @AppStorage(AppStorageKey.showEstimates) private var showEstimates = true
     @State private var selectedRep: Int?
     @State private var showDiscardConfirmation = false
 
@@ -36,7 +37,16 @@ struct SetResultsView: View {
                         if let zone = result.speedZone {
                             zoneCard(zone)
                         }
+                        if analytics.count >= 2 {
+                            speedDropCard
+                        }
+                        if showEstimates && analytics.hasVelocityEstimates {
+                            velocityCard
+                        }
                         chartCard
+                        if showEstimates && analytics.averageRangeOfMotion != nil {
+                            rangeOfMotionCard
+                        }
                         extremesRow
                         comparisonCard
                         repBreakdown
@@ -83,6 +93,9 @@ struct SetResultsView: View {
                 Text(unit.format(kg: result.weightKg))
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Theme.textSecondary)
+
+                RestTimerPill(since: result.endedAt)
+                    .padding(.top, 4)
             }
             Spacer()
             CircleIconButton(systemName: "xmark", size: 38) {
@@ -91,6 +104,143 @@ struct SetResultsView: View {
             .accessibilityLabel("Discard workout")
         }
         .padding(.top, 8)
+    }
+
+    private func repSubtitle(_ rep: RepRecord) -> String {
+        var parts = [Format.seconds(rep.duration)]
+        if showEstimates {
+            if let velocity = rep.meanVelocity { parts.append("\(Format.velocity(velocity)) m/s") }
+            if let rom = rep.rangeOfMotionCm { parts.append("\(Format.centimetres(rom)) cm") }
+        } else {
+            parts.append("at \(Format.clock(rep.timestamp))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Speed drop
+
+    private var speedDropCard: some View {
+        let drop = analytics.velocityLoss ?? 0
+        let limit = result.velocityLossLimit
+        let cutoffRep = limit.flatMap { analytics.firstRepPastLimit($0) }
+        let color: Color = {
+            guard let limit else { return drop >= 25 ? Theme.slow : Theme.textPrimary }
+            return drop >= limit ? Theme.danger : Theme.fast
+        }()
+        return Card(highlight: cutoffRep == nil ? nil : Theme.danger) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    SectionLabel("Speed drop")
+                    Spacer()
+                    if let limit {
+                        Text("Limit \(Int(limit))%")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(Int(drop.rounded()))%")
+                        .font(.metric(40, weight: .heavy))
+                        .foregroundStyle(color)
+                    Text("last rep vs fastest rep")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                if let cutoffRep {
+                    Label("Limit reached on rep \(cutoffRep.number). Reps after this added fatigue.", systemImage: "hand.raised.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.danger)
+                } else if limit != nil {
+                    Label("Stayed within your limit.", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.fast)
+                }
+            }
+        }
+    }
+
+    // MARK: - Estimated velocity
+
+    private var velocityCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    SectionLabel("Velocity & power")
+                    Spacer()
+                    EstimateTag()
+                }
+                HStack(spacing: 8) {
+                    MiniMetric(label: "Avg mean vel.", value: analytics.averageMeanVelocity.map(Format.velocity) ?? "–", unit: "m/s")
+                    MiniMetric(label: "Best mean vel.", value: analytics.bestMeanVelocity.map(Format.velocity) ?? "–", unit: "m/s", color: Theme.accent)
+                }
+                HStack(spacing: 8) {
+                    MiniMetric(label: "Peak vel.", value: analytics.bestPeakVelocity.map(Format.velocity) ?? "–", unit: "m/s")
+                    MiniMetric(label: "Avg power", value: analytics.averagePower.map(Format.watts) ?? "–", unit: "W")
+                }
+                Text(result.source == .simulated
+                     ? "Simulated in Demo Mode. Real values will come from the AirPod once validated."
+                     : "Estimated from AirPod motion. Not yet validated against a reference device.")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+    }
+
+    // MARK: - Range of motion
+
+    private var rangeOfMotionCard: some View {
+        let short = analytics.shortReps()
+        let spread = analytics.rangeOfMotionSpread ?? 0
+        let consistency: (String, Color) = spread <= 2.5 ? ("Very consistent", Theme.fast)
+            : spread <= 5 ? ("Fairly consistent", Theme.medium)
+            : ("Inconsistent", Theme.slow)
+        return Card {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    SectionLabel("Range of motion")
+                    Spacer()
+                    EstimateTag()
+                }
+                HStack(spacing: 8) {
+                    MiniMetric(label: "Avg depth", value: analytics.averageRangeOfMotion.map(Format.centimetres) ?? "–", unit: "cm")
+                    MiniMetric(label: "Variation", value: "±\(String(format: "%.1f", spread))", unit: "cm")
+                    MiniMetric(label: "Consistency", value: consistency.0, color: consistency.1)
+                }
+                if let median = analytics.medianRangeOfMotion {
+                    VStack(spacing: 6) {
+                        ForEach(result.reps) { rep in
+                            let rom = rep.rangeOfMotionCm ?? median
+                            let isShort = short.contains { $0.id == rep.id }
+                            HStack(spacing: 8) {
+                                Text("\(rep.number)")
+                                    .font(.caption.weight(.heavy))
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .frame(width: 18, alignment: .leading)
+                                GeometryReader { geometry in
+                                    Capsule()
+                                        .fill(isShort ? Theme.slow : Theme.accent.opacity(0.7))
+                                        .frame(width: geometry.size.width * min(1, rom / (median * 1.15)))
+                                }
+                                .frame(height: 6)
+                                Text("\(Format.centimetres(rom)) cm")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(isShort ? Theme.slow : Theme.textSecondary)
+                                    .frame(width: 48, alignment: .trailing)
+                            }
+                        }
+                    }
+                }
+                if short.isEmpty {
+                    Label("Every rep reached a similar depth.", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.fast)
+                } else {
+                    Label("Rep \(short.map { "\($0.number)" }.joined(separator: ", ")) \(short.count == 1 ? "was" : "were") noticeably shorter than usual. Check depth.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.slow)
+                }
+            }
+        }
     }
 
     // MARK: - Metrics
@@ -357,7 +507,7 @@ struct SetResultsView: View {
                                         .frame(width: geometry.size.width * min(1, rep.speedScore / 100))
                                 }
                                 .frame(height: 6)
-                                Text("\(Format.seconds(rep.duration)) · at \(Format.clock(rep.timestamp))")
+                                Text(repSubtitle(rep))
                                     .font(.caption2)
                                     .foregroundStyle(Theme.textTertiary)
                             }
@@ -506,8 +656,14 @@ struct RepDetailRow: View {
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surfaceRaised))
     }
 
+    @AppStorage(AppStorageKey.showEstimates) private var showEstimates = true
+
     private var detailText: String {
         var parts = ["Duration \(Format.seconds(rep.duration))", "at \(Format.clock(rep.timestamp))"]
+        if showEstimates {
+            if let velocity = rep.meanVelocity { parts.append("\(Format.velocity(velocity)) m/s est.") }
+            if let rom = rep.rangeOfMotionCm { parts.append("\(Format.centimetres(rom)) cm") }
+        }
         if let firstScore, rep.number > 1, firstScore > 0 {
             parts.append("\(Format.signedPercent((rep.speedScore - firstScore) / firstScore * 100)) vs rep 1")
         }
