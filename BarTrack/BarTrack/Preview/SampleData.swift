@@ -39,14 +39,12 @@ enum SampleData {
         let calendar = Calendar.current
 
         // (days ago, exercise, sets, reps per set)
+        // Back Squat only for now, matching the lifts the app supports.
         let plan: [(Int, Exercise, Int, Int)] = [
-            (34, .backSquat, 4, 5), (33, .benchPress, 4, 6), (31, .deadlift, 3, 3),
-            (29, .overheadPress, 3, 8), (27, .backSquat, 4, 5), (26, .barbellRow, 4, 8),
-            (24, .benchPress, 4, 6), (22, .deadlift, 3, 3), (20, .backSquat, 5, 5),
-            (19, .overheadPress, 3, 8), (17, .benchPress, 4, 5), (15, .barbellRow, 4, 8),
-            (13, .backSquat, 4, 4), (12, .deadlift, 3, 3), (10, .benchPress, 4, 5),
-            (8, .overheadPress, 4, 6), (6, .backSquat, 4, 3), (5, .barbellRow, 3, 10),
-            (3, .benchPress, 3, 5), (1, .deadlift, 3, 2),
+            (34, .backSquat, 4, 5), (31, .backSquat, 4, 6), (27, .backSquat, 4, 5),
+            (24, .backSquat, 5, 5), (20, .backSquat, 5, 5), (17, .backSquat, 4, 4),
+            (13, .backSquat, 4, 4), (10, .backSquat, 5, 3), (6, .backSquat, 4, 3),
+            (3, .backSquat, 3, 5), (1, .backSquat, 3, 2),
         ]
 
         for (index, (daysAgo, exercise, setCount, repsPerSet)) in plan.enumerated() {

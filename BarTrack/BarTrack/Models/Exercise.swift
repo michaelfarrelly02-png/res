@@ -9,6 +9,11 @@ enum Exercise: String, CaseIterable, Identifiable, Codable, Hashable {
 
     var id: String { rawValue }
 
+    /// Lifts that can be tracked right now. The others show as "Coming soon".
+    static let available: [Exercise] = [.backSquat]
+
+    var isAvailable: Bool { Self.available.contains(self) }
+
     var displayName: String {
         switch self {
         case .backSquat: "Back Squat"

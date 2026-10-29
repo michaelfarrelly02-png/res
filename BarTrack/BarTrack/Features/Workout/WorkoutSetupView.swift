@@ -21,6 +21,7 @@ struct WorkoutSetupView: View {
     @State private var activeFlow: WorkoutFlowController?
     @State private var didLoadDefaults = false
     @State private var showAirPodsInfo = false
+    @State private var comingSoonExercise: Exercise?
     @FocusState private var weightFocused: Bool
 
     private var unit: WeightUnit { WeightUnit(rawValue: unitRaw) ?? .kg }
@@ -79,6 +80,17 @@ struct WorkoutSetupView: View {
                     .environment(router)
                     .modelContext(modelContext)
             }
+            .alert(
+                "\(comingSoonExercise?.displayName ?? "This lift") is coming soon",
+                isPresented: Binding(
+                    get: { comingSoonExercise != nil },
+                    set: { if !$0 { comingSoonExercise = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("BarTrack currently supports the Back Squat only. More lifts will be added once tracking has been tested on them.")
+            }
             .alert("AirPods tracking is coming soon", isPresented: $showAirPodsInfo) {
                 Button("Use Demo Mode") { demoMode = true }
                 Button("OK", role: .cancel) {}
@@ -96,8 +108,12 @@ struct WorkoutSetupView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(Exercise.allCases) { item in
                     ExerciseOptionCard(exercise: item, isSelected: item == exercise) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            exercise = item
+                        if item.isAvailable {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                exercise = item
+                            }
+                        } else {
+                            comingSoonExercise = item
                         }
                     }
                 }
@@ -359,7 +375,8 @@ struct WorkoutSetupView: View {
     private func loadDefaults() {
         guard !didLoadDefaults else { return }
         didLoadDefaults = true
-        exercise = Exercise(rawValue: lastExerciseRaw) ?? .backSquat
+        let saved = Exercise(rawValue: lastExerciseRaw) ?? .backSquat
+        exercise = saved.isAvailable ? saved : .backSquat
         weightText = unit.number(fromKg: exercise.defaultWeightKg)
     }
 
@@ -394,14 +411,26 @@ private struct ExerciseOptionCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: exercise.symbol)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(isSelected ? Theme.onAccent : Theme.accent)
-                    .frame(width: 42, height: 42)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(isSelected ? Theme.accent : Theme.accent.opacity(0.12))
-                    )
+                HStack(alignment: .top) {
+                    Image(systemName: exercise.symbol)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(isSelected ? Theme.onAccent : (exercise.isAvailable ? Theme.accent : Theme.textTertiary))
+                        .frame(width: 42, height: 42)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(isSelected ? Theme.accent : (exercise.isAvailable ? Theme.accent.opacity(0.12) : Theme.surfaceRaised))
+                        )
+                    Spacer(minLength: 0)
+                    if !exercise.isAvailable {
+                        Text("SOON")
+                            .font(.caption2.weight(.heavy))
+                            .tracking(1)
+                            .foregroundStyle(Theme.warning)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Theme.warning.opacity(0.14)))
+                    }
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.displayName)
                         .font(.subheadline.weight(.bold))
@@ -426,7 +455,9 @@ private struct ExerciseOptionCard: View {
             )
         }
         .buttonStyle(PressableButtonStyle())
+        .opacity(exercise.isAvailable ? 1 : 0.55)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint(exercise.isAvailable ? "" : "Coming soon")
     }
 }
 

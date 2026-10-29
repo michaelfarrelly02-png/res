@@ -97,7 +97,9 @@ struct HistoryView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 FilterChip(title: "All", isSelected: filter == nil) { filter = nil }
-                ForEach(Exercise.allCases) { exercise in
+                ForEach(Exercise.allCases.filter { exercise in
+                    exercise.isAvailable || sessions.contains { $0.exercise == exercise }
+                }) { exercise in
                     FilterChip(title: exercise.shortName, isSelected: filter == exercise) {
                         filter = exercise
                     }
