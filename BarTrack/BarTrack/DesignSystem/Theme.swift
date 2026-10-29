@@ -10,6 +10,9 @@ enum AppStorageKey {
     static let userName = "userName"
     static let lastExercise = "lastExercise"
     static let simulationPace = "simulationPace"
+    static let zoneEnabled = "speedZoneEnabled"
+    static let zoneLower = "speedZoneLower"
+    static let zoneUpper = "speedZoneUpper"
 }
 
 // MARK: - Theme options

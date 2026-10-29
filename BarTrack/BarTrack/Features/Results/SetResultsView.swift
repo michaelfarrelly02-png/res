@@ -33,6 +33,9 @@ struct SetResultsView: View {
                         )
                     } else {
                         metricsGrid
+                        if let zone = result.speedZone {
+                            zoneCard(zone)
+                        }
                         chartCard
                         extremesRow
                         comparisonCard
@@ -152,6 +155,7 @@ struct SetResultsView: View {
                 RepSpeedChart(
                     reps: result.reps,
                     height: 200,
+                    speedZone: result.speedZone,
                     isInteractive: true,
                     selectedRep: $selectedRep
                 )
@@ -170,6 +174,49 @@ struct SetResultsView: View {
     }
 
     // MARK: - Extremes
+
+    private func zoneCard(_ zone: SpeedZone) -> some View {
+        let total = result.reps.count
+        let inZone = analytics.inZoneCount(zone)
+        let below = result.reps.filter { zone.status(for: $0.speedScore) == .below }.count
+        let above = result.reps.filter { zone.status(for: $0.speedScore) == .above }.count
+        let share = total > 0 ? Double(inZone) / Double(total) : 0
+        return Card(highlight: Theme.accent) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    SectionLabel("Target zone \(zone.text)")
+                    Spacer()
+                    Text("\(Int((share * 100).rounded()))%")
+                        .font(.metric(22, weight: .heavy))
+                        .foregroundStyle(Theme.accent)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(inZone)")
+                        .font(.metric(40, weight: .heavy))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("of \(total) reps in zone")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.surfaceRaised)
+                        Capsule()
+                            .fill(Theme.accent.gradient)
+                            .frame(width: geometry.size.width * share)
+                    }
+                }
+                .frame(height: 10)
+                HStack(spacing: 14) {
+                    Label("\(below) too slow", systemImage: "arrow.down")
+                        .foregroundStyle(below > 0 ? Theme.slow : Theme.textTertiary)
+                    Label("\(above) too fast", systemImage: "arrow.up")
+                        .foregroundStyle(above > 0 ? Theme.medium : Theme.textTertiary)
+                }
+                .font(.caption.weight(.semibold))
+            }
+        }
+    }
 
     private var extremesRow: some View {
         HStack(spacing: 10) {

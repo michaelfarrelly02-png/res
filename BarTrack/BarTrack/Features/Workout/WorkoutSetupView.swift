@@ -9,6 +9,9 @@ struct WorkoutSetupView: View {
     @AppStorage(AppStorageKey.demoMode) private var demoMode = true
     @AppStorage(AppStorageKey.weightUnit) private var unitRaw = WeightUnit.kg.rawValue
     @AppStorage(AppStorageKey.lastExercise) private var lastExerciseRaw = Exercise.backSquat.rawValue
+    @AppStorage(AppStorageKey.zoneEnabled) private var zoneEnabled = false
+    @AppStorage(AppStorageKey.zoneLower) private var zoneLower = 60.0
+    @AppStorage(AppStorageKey.zoneUpper) private var zoneUpper = 80.0
 
     @State private var exercise: Exercise = .backSquat
     @State private var weightText = ""
@@ -37,6 +40,7 @@ struct WorkoutSetupView: View {
                     exerciseSection
                     weightSection
                     targetSection
+                    speedZoneSection
                     trackingSection
                     startSection
                 }
@@ -202,6 +206,94 @@ struct WorkoutSetupView: View {
         }
     }
 
+    private var currentZone: SpeedZone { SpeedZone(lower: zoneLower, upper: zoneUpper) }
+
+    private var speedZoneSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("Target speed zone")
+            Card {
+                VStack(spacing: 14) {
+                    Toggle(isOn: $zoneEnabled.animation()) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Aim for a speed range")
+                                .font(.headline)
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("Each rep is marked in zone, too slow or too fast.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                    .tint(Theme.accent)
+
+                    if zoneEnabled {
+                        VStack(spacing: 14) {
+                            HStack(spacing: 8) {
+                                ForEach(SpeedZone.Preset.allCases) { preset in
+                                    let isSelected = SpeedZone.Preset.matching(currentZone) == preset
+                                    Button {
+                                        if let zone = preset.zone {
+                                            withAnimation(.snappy) {
+                                                zoneLower = zone.lower
+                                                zoneUpper = zone.upper
+                                            }
+                                        }
+                                    } label: {
+                                        Text(preset.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(isSelected ? Theme.onAccent : Theme.textPrimary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.8)
+                                            .frame(maxWidth: .infinity, minHeight: 34)
+                                            .background(Capsule().fill(isSelected ? Theme.accent : Theme.surfaceRaised))
+                                    }
+                                    .buttonStyle(PressableButtonStyle())
+                                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                                }
+                            }
+
+                            SpeedZoneBar(zone: currentZone)
+
+                            HStack(spacing: 12) {
+                                zoneStepper(title: "Low", value: zoneLower) { delta in
+                                    zoneLower = (zoneLower + delta).clamped(to: 0...(zoneUpper - 5))
+                                }
+                                zoneStepper(title: "High", value: zoneUpper) { delta in
+                                    zoneUpper = (zoneUpper + delta).clamped(to: (zoneLower + 5)...100)
+                                }
+                            }
+
+                            Text("Uses the relative speed score (0–100), not m/s.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+            }
+        }
+    }
+
+    private func zoneStepper(title: String, value: Double, change: @escaping (Double) -> Void) -> some View {
+        HStack {
+            CircleIconButton(systemName: "minus", size: 34) { withAnimation(.snappy) { change(-5) } }
+            Spacer(minLength: 0)
+            VStack(spacing: 0) {
+                Text(Format.score(value))
+                    .font(.metric(26, weight: .heavy))
+                    .foregroundStyle(Theme.textPrimary)
+                    .contentTransition(.numericText(value: value))
+                Text(title.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            Spacer(minLength: 0)
+            CircleIconButton(systemName: "plus", size: 34) { withAnimation(.snappy) { change(5) } }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surfaceRaised.opacity(0.6)))
+    }
+
     private var trackingSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Tracking mode")
@@ -285,7 +377,8 @@ struct WorkoutSetupView: View {
             exercise: exercise,
             weightKg: unit.toKg(weightValue),
             targetReps: useTargetReps ? targetReps : nil,
-            source: .simulated
+            source: .simulated,
+            speedZone: zoneEnabled ? currentZone : nil
         )
         activeFlow = WorkoutFlowController(configuration: configuration)
     }

@@ -219,6 +219,76 @@ struct EmptyStateView: View {
     }
 }
 
+// MARK: - Speed zone
+
+extension SpeedZone.Status {
+    var color: Color {
+        switch self {
+        case .below: Theme.slow
+        case .inZone: Theme.accent
+        case .above: Theme.medium
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .below: "arrow.down"
+        case .inZone: "checkmark"
+        case .above: "arrow.up"
+        }
+    }
+}
+
+/// "IN ZONE" / "TOO SLOW" / "TOO FAST" chip.
+struct ZoneStatusBadge: View {
+    let status: SpeedZone.Status
+
+    var body: some View {
+        Label(status.label, systemImage: status.symbol)
+            .font(.caption.weight(.heavy))
+            .tracking(0.8)
+            .foregroundStyle(status.color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(status.color.opacity(0.15)))
+            .overlay(Capsule().strokeBorder(status.color.opacity(0.35), lineWidth: 1))
+    }
+}
+
+/// A 0–100 track with the target zone highlighted.
+struct SpeedZoneBar: View {
+    let zone: SpeedZone
+
+    var body: some View {
+        VStack(spacing: 4) {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(LinearGradient(
+                            colors: [Theme.slow.opacity(0.35), Theme.medium.opacity(0.35), Theme.fast.opacity(0.35)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ))
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Theme.accent.opacity(0.3))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 2))
+                        .frame(width: max(8, width * (zone.upper - zone.lower) / 100))
+                        .offset(x: width * zone.lower / 100)
+                }
+            }
+            .frame(height: 16)
+            HStack {
+                Text("0 · SLOW").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+                Spacer()
+                Text("FAST · 100").font(.caption2.weight(.semibold)).foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .animation(.snappy, value: zone)
+        .accessibilityLabel("Target speed zone \(zone.text)")
+    }
+}
+
 // MARK: - Logo
 
 struct BarbellGlyph: View {

@@ -16,12 +16,70 @@ struct RepRecord: Codable, Identifiable, Hashable {
     var timestamp: TimeInterval
 }
 
+/// The relative speed-score range the lifter is aiming for (e.g. 60–80).
+struct SpeedZone: Codable, Hashable {
+    var lower: Double
+    var upper: Double
+
+    enum Status {
+        case below, inZone, above
+
+        var label: String {
+            switch self {
+            case .below: "TOO SLOW"
+            case .inZone: "IN ZONE"
+            case .above: "TOO FAST"
+            }
+        }
+    }
+
+    func status(for score: Double) -> Status {
+        if score < lower { return .below }
+        if score > upper { return .above }
+        return .inZone
+    }
+
+    func contains(_ score: Double) -> Bool { status(for: score) == .inZone }
+
+    var text: String { "\(Int(lower))–\(Int(upper))" }
+
+    /// Ready-made zones. Scores are relative, so these are starting points.
+    enum Preset: String, CaseIterable, Identifiable {
+        case speed, power, strength, custom
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .speed: "Speed"
+            case .power: "Power"
+            case .strength: "Strength"
+            case .custom: "Custom"
+            }
+        }
+
+        var zone: SpeedZone? {
+            switch self {
+            case .speed: SpeedZone(lower: 75, upper: 95)
+            case .power: SpeedZone(lower: 60, upper: 80)
+            case .strength: SpeedZone(lower: 40, upper: 60)
+            case .custom: nil
+            }
+        }
+
+        static func matching(_ zone: SpeedZone) -> Preset {
+            allCases.first { $0.zone == zone } ?? .custom
+        }
+    }
+}
+
 /// Settings chosen on the Start Workout screen.
 struct SetConfiguration: Hashable {
     var exercise: Exercise
     var weightKg: Double
     var targetReps: Int?
     var source: TrackingSource
+    var speedZone: SpeedZone? = nil
 }
 
 /// A finished set before it is saved to storage.
@@ -35,6 +93,7 @@ struct SetResult: Identifiable, Hashable {
     var duration: TimeInterval
     var startedAt: Date
     var source: TrackingSource
+    var speedZone: SpeedZone? = nil
 
     var analytics: SetAnalytics { SetAnalytics(reps: reps) }
 }
@@ -90,5 +149,9 @@ struct SetAnalytics {
 
     func count(of speedClass: SpeedClass) -> Int {
         reps.filter { $0.speedClass == speedClass }.count
+    }
+
+    func inZoneCount(_ zone: SpeedZone) -> Int {
+        reps.filter { zone.contains($0.speedScore) }.count
     }
 }

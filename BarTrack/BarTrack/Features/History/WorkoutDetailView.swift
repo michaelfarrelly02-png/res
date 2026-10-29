@@ -185,10 +185,20 @@ private struct SetDetailCard: View {
                     stat("Reps", repsText)
                     stat("Avg", Format.optionalScore(analytics.averageScore))
                     stat("Best", analytics.fastest.map { Format.score($0.speedScore) } ?? "–")
-                    stat("Early→Late", analytics.earlyToLateChange.map(Format.signedPercent) ?? "–")
+                    if let zone = entry.speedZone {
+                        stat("In zone", "\(analytics.inZoneCount(zone))/\(reps.count)")
+                    } else {
+                        stat("Early→Late", analytics.earlyToLateChange.map(Format.signedPercent) ?? "–")
+                    }
                 }
 
-                RepSpeedChart(reps: reps, height: 140, isInteractive: true, selectedRep: $selectedRep)
+                if let zone = entry.speedZone {
+                    Label("Target zone \(zone.text)", systemImage: "scope")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Theme.accent)
+                }
+
+                RepSpeedChart(reps: reps, height: 140, speedZone: entry.speedZone, isInteractive: true, selectedRep: $selectedRep)
 
                 if let number = selectedRep, let rep = reps.first(where: { $0.number == number }) {
                     RepDetailRow(rep: rep, firstScore: reps.first?.speedScore) {

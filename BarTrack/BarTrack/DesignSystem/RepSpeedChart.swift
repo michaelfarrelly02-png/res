@@ -9,6 +9,8 @@ struct RepSpeedChart: View {
     var showThresholds = true
     var isInteractive = false
     var showAxes = true
+    /// Shaded target speed zone, if the set had one.
+    var speedZone: SpeedZone?
     @Binding var selectedRep: Int?
 
     init(
@@ -16,6 +18,7 @@ struct RepSpeedChart: View {
         height: CGFloat = 180,
         showThresholds: Bool = true,
         showAxes: Bool = true,
+        speedZone: SpeedZone? = nil,
         isInteractive: Bool = false,
         selectedRep: Binding<Int?> = .constant(nil)
     ) {
@@ -23,6 +26,7 @@ struct RepSpeedChart: View {
         self.height = height
         self.showThresholds = showThresholds
         self.showAxes = showAxes
+        self.speedZone = speedZone
         self.isInteractive = isInteractive
         self._selectedRep = selectedRep
     }
@@ -31,7 +35,21 @@ struct RepSpeedChart: View {
 
     var body: some View {
         Chart {
-            if showThresholds {
+            if let speedZone {
+                RectangleMark(
+                    yStart: .value("Zone low", speedZone.lower),
+                    yEnd: .value("Zone high", speedZone.upper)
+                )
+                .foregroundStyle(Theme.accent.opacity(0.12))
+                .annotation(position: .overlay, alignment: .topTrailing) {
+                    if showAxes {
+                        Text("TARGET \(speedZone.text)")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(Theme.accent.opacity(0.8))
+                            .padding(3)
+                    }
+                }
+            } else if showThresholds {
                 RuleMark(y: .value("Fast threshold", classifier.fastLowerBound))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     .foregroundStyle(SpeedClass.fast.color.opacity(0.35))
@@ -48,6 +66,13 @@ struct RepSpeedChart: View {
                 )
                 .foregroundStyle(rep.speedClass.color.gradient)
                 .cornerRadius(5)
+                .annotation(position: .top, spacing: 2) {
+                    if let speedZone, showAxes, speedZone.contains(rep.speedScore) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 8, weight: .black))
+                            .foregroundStyle(Theme.accent)
+                    }
+                }
                 .opacity(selectedRep == nil || selectedRep == rep.number ? 1 : 0.3)
             }
         }

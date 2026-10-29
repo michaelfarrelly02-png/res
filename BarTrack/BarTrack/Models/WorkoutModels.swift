@@ -46,6 +46,9 @@ final class SetEntry {
     var startedAt: Date
     var repCount: Int
     var repsData: Data
+    /// Target speed zone, if one was set (optional so older saves still load).
+    var zoneLower: Double?
+    var zoneUpper: Double?
     var session: WorkoutSession?
 
     init(result: SetResult) {
@@ -56,6 +59,13 @@ final class SetEntry {
         self.startedAt = result.startedAt
         self.repCount = result.reps.count
         self.repsData = (try? JSONEncoder().encode(result.reps)) ?? Data()
+        self.zoneLower = result.speedZone?.lower
+        self.zoneUpper = result.speedZone?.upper
+    }
+
+    var speedZone: SpeedZone? {
+        guard let zoneLower, let zoneUpper else { return nil }
+        return SpeedZone(lower: zoneLower, upper: zoneUpper)
     }
 
     var reps: [RepRecord] {

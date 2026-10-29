@@ -49,7 +49,9 @@ enum SampleData {
             (3, .benchPress, 3, 5), (1, .deadlift, 3, 2),
         ]
 
-        for (daysAgo, exercise, setCount, repsPerSet) in plan {
+        for (index, (daysAgo, exercise, setCount, repsPerSet)) in plan.enumerated() {
+            // Every other sample workout used a target speed zone.
+            let zone: SpeedZone? = index.isMultiple(of: 2) ? SpeedZone(lower: 55, upper: 80) : nil
             guard let day = calendar.date(byAdding: .day, value: -daysAgo, to: referenceDate),
                   let date = calendar.date(bySettingHour: 17 + daysAgo % 3, minute: 15, second: 0, of: day)
             else { continue }
@@ -70,7 +72,9 @@ enum SampleData {
                     startedAt: setStart,
                     generator: &generator
                 )
-                sets.append(result)
+                var zoned = result
+                zoned.speedZone = zone
+                sets.append(zoned)
                 setStart = setStart.addingTimeInterval(result.duration + 150)
             }
             try? WorkoutStore.save(sets: sets, date: date, in: context)

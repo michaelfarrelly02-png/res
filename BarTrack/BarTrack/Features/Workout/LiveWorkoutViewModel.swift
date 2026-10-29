@@ -43,6 +43,11 @@ final class LiveWorkoutViewModel: Identifiable {
     var isRecording: Bool { status == .recording }
     var analytics: SetAnalytics { SetAnalytics(reps: reps) }
 
+    var inZoneCount: Int {
+        guard let zone = configuration.speedZone else { return 0 }
+        return analytics.inZoneCount(zone)
+    }
+
     var targetProgress: Double {
         guard let target = configuration.targetReps, target > 0 else {
             return reps.isEmpty ? 0 : 1
@@ -109,7 +114,8 @@ final class LiveWorkoutViewModel: Identifiable {
             reps: reps,
             duration: elapsed,
             startedAt: startedAt,
-            source: configuration.source
+            source: configuration.source,
+            speedZone: configuration.speedZone
         )
     }
 

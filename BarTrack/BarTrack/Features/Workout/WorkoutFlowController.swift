@@ -20,6 +20,7 @@ final class WorkoutFlowController: Identifiable {
     /// Weight and target for the next set; editable on the Results screen.
     var weightKg: Double
     var targetReps: Int?
+    var speedZone: SpeedZone?
 
     private(set) var completedSets: [SetResult] = []
     private(set) var phase: Phase
@@ -29,6 +30,7 @@ final class WorkoutFlowController: Identifiable {
         source = configuration.source
         weightKg = configuration.weightKg
         targetReps = configuration.targetReps
+        speedZone = configuration.speedZone
         phase = .live(LiveWorkoutViewModel(configuration: configuration, setNumber: 1))
     }
 
@@ -54,7 +56,8 @@ final class WorkoutFlowController: Identifiable {
             exercise: exercise,
             weightKg: weightKg,
             targetReps: targetReps,
-            source: source
+            source: source,
+            speedZone: speedZone
         )
         phase = .live(LiveWorkoutViewModel(configuration: configuration, setNumber: completedSets.count + 1))
     }

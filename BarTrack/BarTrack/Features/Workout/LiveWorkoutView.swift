@@ -196,6 +196,15 @@ struct LiveWorkoutView: View {
                         }
                         .foregroundStyle(rep.speedClass.color)
                         .contentTransition(.interpolate)
+                        if let zone = viewModel.configuration.speedZone {
+                            HStack(spacing: 8) {
+                                ZoneStatusBadge(status: zone.status(for: rep.speedScore))
+                                Text("\(viewModel.inZoneCount)/\(viewModel.reps.count) in zone")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            .padding(.top, 4)
+                        }
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 0) {
@@ -234,6 +243,14 @@ struct LiveWorkoutView: View {
     private var chartCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
+                if let zone = viewModel.configuration.speedZone {
+                    HStack(spacing: 6) {
+                        Image(systemName: "scope")
+                        Text("Target zone \(zone.text)")
+                    }
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Theme.accent)
+                }
                 HStack {
                     SectionLabel("Speed score per rep")
                     Spacer()
@@ -249,7 +266,7 @@ struct LiveWorkoutView: View {
                                 .foregroundStyle(Theme.textTertiary)
                         )
                 } else {
-                    RepSpeedChart(reps: viewModel.reps, height: 160)
+                    RepSpeedChart(reps: viewModel.reps, height: 160, speedZone: viewModel.configuration.speedZone)
                 }
                 Text("Relative score (0–100), experimental — not m/s.")
                     .font(.caption2)
