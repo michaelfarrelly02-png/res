@@ -1,0 +1,356 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Barlow+Condensed:wght@600;700;800;900&display=swap">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+</head><body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920;
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+const C = {
+  bg: "#070b15", surface: "#0f1626", raised: "#182133", text: "#ffffff", muted: "#a1a9b8", faint: "#6a7386",
+  teal: "#00e6cc", medium: "#5c8cff", slow: "#ff733d", danger: "#ff4d57", warn: "#ffbf40", onTeal: "#04111a",
+};
+const DISPLAY = '"Barlow Condensed", "Arial Narrow", sans-serif';
+const BODY = '"Barlow", Arial, sans-serif';
+
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+const easeInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const backOut = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const classOf = s => s >= 70 ? ["FAST", C.teal] : s < 45 ? ["SLOW", C.slow] : ["MEDIUM", C.medium];
+
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function text(str, x, y, { size = 60, weight = 800, font = DISPLAY, color = C.text, align = "center", alpha = 1, maxW = 0, track = 0 } = {}) {
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  let s = size;
+  ctx.font = `${weight} ${s}px ${font}`;
+  if (maxW) { while (ctx.measureText(str).width + track * str.length > maxW && s > 10) { s -= 2; ctx.font = `${weight} ${s}px ${font}`; } }
+  ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "alphabetic";
+  if ("letterSpacing" in ctx) ctx.letterSpacing = track + "px";
+  ctx.fillText(str, x, y);
+  ctx.restore();
+}
+
+// ---------- Background ----------
+function background(t) {
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  let g = ctx.createRadialGradient(880, 260, 0, 880, 260, 1000);
+  g.addColorStop(0, "rgba(0,230,204,0.14)"); g.addColorStop(1, "rgba(0,230,204,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  g = ctx.createRadialGradient(120, 1750, 0, 120, 1750, 900);
+  g.addColorStop(0, "rgba(92,140,255,0.10)"); g.addColorStop(1, "rgba(92,140,255,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(214,228,255,0.035)"; ctx.lineWidth = 2;
+  const off = (t * 40) % 120;
+  for (let y = -120 + off; y < H; y += 120) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let x = 60; x < W; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+}
+
+// ---------- Scene A: barbell + headline ----------
+function barbell(cx, cy, scale, glow) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale);
+  // bar
+  ctx.fillStyle = "#c7d0e0"; rr(-450, -11, 900, 22, 11); ctx.fill();
+  // plates
+  const plates = [[-330, 300, 56], [-390, 220, 46], [270, 300, 56], [338, 220, 46]];
+  for (const [x, h, w] of plates) {
+    ctx.fillStyle = "#1a2438"; rr(x, -h / 2, w, h, 12); ctx.fill();
+    ctx.strokeStyle = "rgba(0,230,204,0.55)"; ctx.lineWidth = 3; rr(x, -h / 2, w, h, 12); ctx.stroke();
+  }
+  // collars
+  ctx.fillStyle = "#8a95aa"; rr(-272, -26, 20, 52, 6); ctx.fill(); rr(252, -26, 20, 52, 6); ctx.fill();
+  // earbud clipped to the sleeve
+  ctx.save(); ctx.translate(200, 0);
+  ctx.shadowColor = "rgba(0,230,204," + (0.5 + glow * 0.5) + ")"; ctx.shadowBlur = 30 + glow * 40;
+  ctx.fillStyle = "#f4f6fa"; rr(-15, -8, 30, 92, 15); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, -30, 34, 30, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#c9ced8"; ctx.beginPath(); ctx.ellipse(-10, -32, 12, 10, 0, 0, Math.PI * 2); ctx.fill();
+  // clip band
+  ctx.fillStyle = C.teal; rr(-36, -12, 72, 24, 8); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+function sceneA(t) {
+  const out = 1 - prog(t, 1.95, 2.3);
+  if (out <= 0) return;
+  ctx.save(); ctx.globalAlpha = out;
+  // squat motion: down then up, about one rep in 1.7 s
+  const phase = (t + 0.2) / 1.7 * Math.PI * 2;
+  const y = 1260 + 150 * (0.5 - 0.5 * Math.cos(phase));
+  const vel = Math.sin(phase); // + going down, - coming up
+  // velocity trail when moving up
+  if (vel < 0) {
+    const a = -vel;
+    for (let i = 0; i < 9; i++) {
+      const x = 170 + i * 90 + ((i * 37) % 30);
+      const g = ctx.createLinearGradient(0, y, 0, y + 260 * a);
+      g.addColorStop(0, `rgba(0,230,204,${0.55 * a})`); g.addColorStop(1, "rgba(0,230,204,0)");
+      ctx.fillStyle = g; rr(x, y + 20, 6, 240 * a, 3); ctx.fill();
+    }
+  }
+  const enter = easeOut(prog(t, 0, 0.5));
+  barbell(540, y, 0.95 + 0.05 * enter, Math.max(0, -vel));
+  // live speed readout next to the bar
+  const rd = prog(t, 0.9, 1.2);
+  if (rd > 0) {
+    const s = Math.round(lerp(40, 92, clamp(-vel)));
+    ctx.save(); ctx.globalAlpha *= rd;
+    rr(700, y - 330, 250, 110, 26); ctx.fillStyle = "rgba(15,22,38,0.92)"; ctx.fill();
+    ctx.strokeStyle = "rgba(0,230,204,0.5)"; ctx.lineWidth = 3; ctx.stroke();
+    text(vel < -0.2 ? "FAST" : "LIVE", 825, y - 260, { size: 58, weight: 900, color: vel < -0.2 ? C.teal : C.muted });
+    ctx.strokeStyle = "rgba(0,230,204,0.5)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(740, y - 220); ctx.lineTo(740, y - 60); ctx.stroke();
+    ctx.restore();
+  }
+  // headline
+  const lines = [
+    ["YOUR AIRPODS.", 470, 0.10, C.text, 150],
+    ["JUST BECAME A", 620, 0.45, C.text, 150],
+    ["BAR SPEED SENSOR.", 790, 0.85, C.teal, 168],
+  ];
+  for (const [str, ly, start, color, size] of lines) {
+    const p = easeOut(prog(t, start, start + 0.35));
+    if (p <= 0) continue;
+    const punch = str.startsWith("BAR") ? backOut(prog(t, start, start + 0.45)) : p;
+    ctx.save();
+    ctx.translate(540, ly + (1 - p) * 50);
+    const sc = str.startsWith("BAR") ? lerp(1.25, 1, clamp(punch)) : 1;
+    ctx.scale(sc, sc);
+    text(str, 0, 0, { size, weight: 900, color, alpha: p, maxW: 980 });
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// ---------- Scene B: live app screen ----------
+const REPS = [2.75, 3.3, 3.85, 4.4, 4.95];
+const SCORES = [91, 90, 84, 78, 66];
+const LIMIT = 20;
+const STOP_T = 5.15;
+
+function sceneB(t) {
+  const inP = easeOut(prog(t, 2.15, 2.6));
+  const outP = easeInOut(prog(t, 6.55, 6.95));
+  if (inP <= 0 || outP >= 1) return;
+  const done = REPS.filter(r => t >= r).length;
+  const latest = done ? done - 1 : -1;
+
+  // captions
+  const cap1 = prog(t, 2.35, 2.65) * (1 - prog(t, 5.05, 5.2));
+  const cap2 = prog(t, 5.2, 5.4);
+  ctx.save(); ctx.globalAlpha = 1 - outP;
+  if (cap1 > 0) text("EVERY REP. MEASURED LIVE.", 540, 205 + (1 - cap1) * 20, { size: 92, weight: 900, alpha: cap1, maxW: 980 });
+  if (cap2 > 0) text("KNOW WHEN TO STOP.", 540, 205 + (1 - cap2) * 20, { size: 104, weight: 900, color: C.text, alpha: cap2, maxW: 980 });
+  ctx.restore();
+
+  // phone frame
+  const pw = 780, ph = 1500, px = (W - pw) / 2, py0 = 300;
+  ctx.save();
+  ctx.globalAlpha = inP * (1 - outP);
+  const sc = 0.88 + 0.12 * inP;
+  ctx.translate(W / 2, py0 + ph / 2 - outP * 500); ctx.scale(sc, sc); ctx.translate(-W / 2, -(py0 + ph / 2));
+  const py = py0;
+  ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 80; ctx.shadowOffsetY = 30;
+  rr(px - 14, py - 14, pw + 28, ph + 28, 104); ctx.fillStyle = "#0a0e17"; ctx.fill();
+  ctx.shadowColor = "transparent";
+  rr(px, py, pw, ph, 92); ctx.fillStyle = "#080d18"; ctx.fill();
+  ctx.strokeStyle = "rgba(214,228,255,0.18)"; ctx.lineWidth = 3; ctx.stroke();
+  ctx.save(); rr(px, py, pw, ph, 92); ctx.clip();
+  let g = ctx.createRadialGradient(px + pw, py, 0, px + pw, py, 700);
+  g.addColorStop(0, "rgba(0,230,204,0.12)"); g.addColorStop(1, "rgba(0,230,204,0)");
+  ctx.fillStyle = g; ctx.fillRect(px, py, pw, ph);
+  // island
+  rr(px + pw / 2 - 110, py + 26, 220, 60, 30); ctx.fillStyle = "#000"; ctx.fill();
+
+  // header
+  text("BACK SQUAT", px + pw / 2, py + 175, { size: 58, weight: 800 });
+  text("SET 1 · 120 KG", px + pw / 2, py + 222, { size: 34, weight: 800, color: C.teal, track: 2 });
+  const pulse = 0.4 + 0.6 * Math.abs(Math.sin(t * 4));
+  rr(px + pw - 190, py + 135, 130, 56, 28); ctx.fillStyle = "rgba(255,69,84,0.14)"; ctx.fill();
+  ctx.fillStyle = `rgba(255,69,84,${pulse})`; ctx.beginPath(); ctx.arc(px + pw - 160, py + 163, 9, 0, Math.PI * 2); ctx.fill();
+  text("REC", px + pw - 108, py + 175, { size: 32, weight: 900, color: "#ff4554" });
+
+  // ring + counter
+  const cx = px + pw / 2, cy = py + 500, R = 185;
+  const ringColor = latest >= 0 ? classOf(SCORES[latest])[1] : C.teal;
+  const ringP = latest >= 0 ? (latest + easeOut(prog(t, REPS[latest], REPS[latest] + 0.3))) / 5 : 0;
+  ctx.lineWidth = 28; ctx.lineCap = "round";
+  ctx.strokeStyle = C.raised; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  if (ringP > 0) {
+    ctx.save(); ctx.shadowColor = ringColor; ctx.shadowBlur = 30;
+    ctx.strokeStyle = ringColor; ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ringP); ctx.stroke();
+    ctx.restore();
+  }
+  // haptic pulse
+  if (latest >= 0) {
+    const hp = prog(t, REPS[latest], REPS[latest] + 0.5);
+    if (hp < 1) { ctx.strokeStyle = ringColor; ctx.globalAlpha *= (1 - hp) * 0.6; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, R + 20 + hp * 90, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = inP * (1 - outP); }
+  }
+  const pop = latest >= 0 ? backOut(prog(t, REPS[latest], REPS[latest] + 0.3)) : 1;
+  ctx.save(); ctx.translate(cx, cy + 60); ctx.scale(lerp(0.6, 1, clamp(pop)) * (pop > 1 ? pop : 1), lerp(0.6, 1, clamp(pop)) * (pop > 1 ? pop : 1));
+  text(String(done), 0, 0, { size: 250, weight: 900 });
+  ctx.restore();
+  text("OF 5 REPS", cx, cy + 115, { size: 34, weight: 800, color: C.muted, track: 3 });
+
+  // latest rep card
+  const cardY = py + 735;
+  rr(px + 50, cardY, pw - 100, 200, 38); ctx.fillStyle = C.surface; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = latest >= 0 ? classOf(SCORES[latest])[1] + "88" : "rgba(214,228,255,0.1)"; ctx.stroke();
+  if (latest >= 0) {
+    const [lab, col] = classOf(SCORES[latest]);
+    const f = easeOut(prog(t, REPS[latest], REPS[latest] + 0.25));
+    text(`REP ${latest + 1} · RELATIVE SPEED`, px + 90, cardY + 62, { size: 28, weight: 800, color: C.muted, align: "left", track: 2 });
+    text(lab, px + 90, cardY + 160, { size: 104, weight: 900, color: col, align: "left", alpha: f });
+    text(String(SCORES[latest]), px + pw - 90, cardY + 140, { size: 104, weight: 900, align: "right" });
+    text("score / 100", px + pw - 90, cardY + 180, { size: 26, weight: 600, font: BODY, color: C.muted, align: "right" });
+  } else {
+    text("Waiting for first rep…", px + 90, cardY + 92, { size: 40, weight: 700, font: BODY, align: "left" });
+    text("Timer starts on your first rep", px + 90, cardY + 145, { size: 30, weight: 600, font: BODY, color: C.teal, align: "left" });
+  }
+
+  // chart card
+  const chY = py + 960, chH = 300, chX = px + 50, chW = pw - 100;
+  rr(chX, chY, chW, chH, 38); ctx.fillStyle = C.surface; ctx.fill();
+  text("SPEED SCORE PER REP", chX + 40, chY + 58, { size: 28, weight: 800, color: C.muted, align: "left", track: 2 });
+  const base = chY + chH - 40, top = chY + 90, ih = base - top;
+  ctx.setLineDash([10, 10]); ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(0,230,204,0.4)"; ctx.beginPath(); ctx.moveTo(chX + 40, base - ih * 0.7); ctx.lineTo(chX + chW - 40, base - ih * 0.7); ctx.stroke();
+  ctx.setLineDash([]);
+  const slot = (chW - 80) / 5;
+  for (let i = 0; i < done; i++) {
+    const gp = easeOut(prog(t, REPS[i], REPS[i] + 0.3));
+    const h = ih * SCORES[i] / 100 * gp;
+    ctx.fillStyle = classOf(SCORES[i])[1];
+    rr(chX + 40 + slot * i + slot * 0.2, base - h, slot * 0.6, h, 10); ctx.fill();
+  }
+
+  // speed-drop card
+  const dY = py + 1285;
+  rr(chX, dY, chW, 150, 38); ctx.fillStyle = C.surface; ctx.fill();
+  let best = 0, drop = 0;
+  for (let i = 0; i < done; i++) { best = Math.max(best, SCORES[i]); drop = (best - SCORES[i]) / best * 100; }
+  const shownDrop = done ? lerp(done > 1 ? (() => { let b = 0, d = 0; for (let i = 0; i < done - 1; i++) { b = Math.max(b, SCORES[i]); d = (b - SCORES[i]) / b * 100; } return d; })() : 0, drop, easeOut(prog(t, REPS[done - 1], REPS[done - 1] + 0.35))) : 0;
+  const frac = Math.min(1, shownDrop / LIMIT);
+  const dcol = shownDrop >= LIMIT ? C.danger : frac > 0.65 ? C.warn : C.teal;
+  text("SPEED DROP", chX + 40, dY + 60, { size: 28, weight: 800, color: C.muted, align: "left", track: 2 });
+  text(`${Math.round(shownDrop)}%`, chX + chW - 130, dY + 66, { size: 60, weight: 900, color: dcol, align: "right" });
+  text(`/ ${LIMIT}%`, chX + chW - 40, dY + 64, { size: 30, weight: 700, color: C.muted, align: "right" });
+  rr(chX + 40, dY + 95, chW - 80, 18, 9); ctx.fillStyle = C.raised; ctx.fill();
+  if (frac > 0) { rr(chX + 40, dY + 95, (chW - 80) * frac, 18, 9); ctx.fillStyle = dcol; ctx.fill(); }
+
+  // STOP THE SET banner
+  const sp = prog(t, STOP_T, STOP_T + 0.4);
+  if (sp > 0) {
+    const flash = Math.max(0, 1 - prog(t, STOP_T, STOP_T + 0.5)) * 0.35 + 0.08 * (0.5 + 0.5 * Math.sin(t * 14)) * (t > STOP_T + 0.5 ? 1 : 0);
+    ctx.fillStyle = `rgba(255,60,70,${flash})`; ctx.fillRect(px, py, pw, ph);
+    const by = lerp(py - 200, py + 110, backOut(sp));
+    ctx.save(); ctx.shadowColor = "rgba(255,60,70,0.7)"; ctx.shadowBlur = 50;
+    rr(px + 40, by, pw - 80, 190, 40); ctx.fillStyle = C.danger; ctx.fill(); ctx.restore();
+    // hand icon (simple palm)
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(px + 130, by + 95, 46, 0, Math.PI * 2); ctx.fill();
+    text("!", px + 130, by + 124, { size: 84, weight: 900, color: C.danger });
+    text("STOP THE SET", px + 205, by + 100, { size: 74, weight: 900, align: "left" });
+    text(`Speed dropped ${Math.round(drop)}% from your best rep`, px + 207, by + 148, { size: 30, weight: 600, font: BODY, align: "left", alpha: 0.92 });
+  }
+  ctx.restore();
+  ctx.restore();
+}
+
+// ---------- Scene C: features ----------
+function icon(kind, x, y) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = "rgba(0,230,204,0.14)"; ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = C.teal; ctx.fillStyle = C.teal; ctx.lineWidth = 8; ctx.lineCap = "round";
+  if (kind === "zone") { for (const r of [40, 24]) { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke(); } ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill(); }
+  if (kind === "drop") { ctx.beginPath(); ctx.moveTo(-36, -26); ctx.lineTo(-8, 4); ctx.lineTo(8, -10); ctx.lineTo(36, 24); ctx.stroke(); ctx.beginPath(); ctx.moveTo(36, 24); ctx.lineTo(14, 24); ctx.moveTo(36, 24); ctx.lineTo(36, 2); ctx.stroke(); }
+  if (kind === "auto") { ctx.beginPath(); ctx.arc(0, 4, 36, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(0, -16); ctx.moveTo(0, 4); ctx.lineTo(16, 14); ctx.stroke(); ctx.fillRect(-10, -46, 20, 10); }
+  ctx.restore();
+}
+function sceneC(t) {
+  const fadeOut = 1 - prog(t, 8.25, 8.5);
+  if (t < 6.7 || fadeOut <= 0) return;
+  ctx.save(); ctx.globalAlpha = fadeOut;
+  const hp = easeOut(prog(t, 6.75, 7.05));
+  text("TRAIN BY SPEED,", 540, 380 + (1 - hp) * 30, { size: 112, weight: 900, alpha: hp, maxW: 980 });
+  text("NOT GUESSWORK.", 540, 500 + (1 - hp) * 30, { size: 112, weight: 900, color: C.teal, alpha: hp, maxW: 980 });
+  const items = [
+    ["zone", "SPEED ZONES", "Hit the range you're training for"],
+    ["drop", "SPEED-DROP ALERTS", "Stop before fatigue piles up"],
+    ["auto", "HANDS-FREE SETS", "Starts on rep one. Ends when you rack."],
+  ];
+  items.forEach(([k, title, sub], i) => {
+    const p = easeOut(prog(t, 6.95 + i * 0.22, 7.35 + i * 0.22));
+    if (p <= 0) return;
+    const y = 640 + i * 290, x = lerp(1180, 90, p);
+    ctx.save(); ctx.globalAlpha *= p;
+    rr(x, y, 900, 240, 44); ctx.fillStyle = C.surface; ctx.fill();
+    ctx.strokeStyle = "rgba(214,228,255,0.1)"; ctx.lineWidth = 3; ctx.stroke();
+    icon(k, x + 125, y + 120);
+    text(title, x + 230, y + 118, { size: 74, weight: 900, align: "left", maxW: 640 });
+    text(sub, x + 232, y + 172, { size: 34, weight: 600, font: BODY, color: C.muted, align: "left", maxW: 640 });
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+// ---------- Scene D: logo end card ----------
+function sceneD(t) {
+  if (t < 8.4) return;
+  const flash = Math.max(0, 1 - prog(t, 8.42, 8.8));
+  const lp = backOut(prog(t, 8.45, 8.9));
+  const lpa = prog(t, 8.45, 8.6);
+  ctx.save(); ctx.globalAlpha = lpa;
+  ctx.translate(540, 760); ctx.scale(lerp(0.4, 1, clamp(lp)) * (lp > 1 ? lp : 1), lerp(0.4, 1, clamp(lp)) * (lp > 1 ? lp : 1));
+  ctx.shadowColor = "rgba(0,230,204,0.6)"; ctx.shadowBlur = 80;
+  const g = ctx.createLinearGradient(-140, -140, 140, 140); g.addColorStop(0, C.teal); g.addColorStop(1, "#00a596");
+  rr(-140, -140, 280, 280, 70); ctx.fillStyle = g; ctx.fill(); ctx.shadowBlur = 0;
+  ctx.fillStyle = C.onTeal;
+  rr(-110, -32, 26, 64, 9); ctx.fill(); rr(-78, -64, 30, 128, 10); ctx.fill(); rr(-48, -11, 96, 22, 11); ctx.fill(); rr(48, -64, 30, 128, 10); ctx.fill(); rr(84, -32, 26, 64, 9); ctx.fill();
+  ctx.restore();
+
+  const wp = easeOut(prog(t, 8.65, 9.0));
+  ctx.save(); ctx.globalAlpha = wp;
+  ctx.font = `900 190px ${DISPLAY}`;
+  if ("letterSpacing" in ctx) ctx.letterSpacing = "10px";
+  const wBar = ctx.measureText("BAR").width, wTrack = ctx.measureText("TRACK").width;
+  const startX = 540 - (wBar + wTrack) / 2, wy = 1110 + (1 - wp) * 30;
+  text("BAR", startX, wy, { size: 190, weight: 900, align: "left", track: 10 });
+  text("TRACK", startX + wBar, wy, { size: 190, weight: 900, color: C.teal, align: "left", track: 10 });
+  ctx.restore();
+
+  const tp = easeOut(prog(t, 8.9, 9.2));
+  text("Velocity-based training with", 540, 1225 + (1 - tp) * 20, { size: 50, weight: 600, font: BODY, color: C.muted, alpha: tp });
+  text("the AirPods you already own.", 540, 1290 + (1 - tp) * 20, { size: 50, weight: 600, font: BODY, color: C.muted, alpha: tp });
+
+  const cp = easeOut(prog(t, 9.15, 9.45));
+  if (cp > 0) {
+    ctx.save(); ctx.globalAlpha = cp;
+    rr(540 - 300, 1400, 600, 110, 55); ctx.strokeStyle = C.teal; ctx.lineWidth = 4; ctx.stroke();
+    ctx.fillStyle = "rgba(0,230,204,0.1)"; ctx.fill();
+    text("COMING SOON TO iPHONE", 540, 1474, { size: 50, weight: 900, color: C.teal, track: 3 });
+    ctx.restore();
+  }
+  text("In development. Speed scores are relative estimates.", 540, 1790, { size: 28, weight: 500, font: BODY, color: C.faint, alpha: prog(t, 9.2, 9.5) });
+  text("AirPods is a trademark of Apple Inc. Not affiliated with Apple.", 540, 1835, { size: 26, weight: 500, font: BODY, color: C.faint, alpha: prog(t, 9.2, 9.5) });
+
+  if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.35})`; ctx.fillRect(0, 0, W, H); }
+}
+
+window.renderAt = function (t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  background(t);
+  sceneA(t); sceneB(t); sceneC(t); sceneD(t);
+  // global fade-in / out
+  const fade = Math.max(1 - prog(t, 0, 0.15), prog(t, 9.85, 10));
+  if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, W, H); }
+};
+window.ready = Promise.all([
+  document.fonts.load(`900 100px "Barlow Condensed"`), document.fonts.load(`800 100px "Barlow Condensed"`),
+  document.fonts.load(`600 40px "Barlow"`), document.fonts.load(`500 40px "Barlow"`), document.fonts.load(`700 40px "Barlow"`),
+]).then(() => document.fonts.ready).then(() => { window.renderAt(0); return document.fonts.check(`900 100px "Barlow Condensed"`); });
+</script>
+</body></html>
